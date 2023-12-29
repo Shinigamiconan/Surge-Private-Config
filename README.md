@@ -1,11 +1,13 @@
 # Surge-Private-Config
 
-- 乾淨世界(去广告)：支持
-- 自动测速：支持
-- 微软分流：支持
-- 苹果分流：支持
-- google分流：支持
-- 增强中国IP段：支持
-- 增强国外GFW：支持
-- 去除網易：支持
+Fork with ACL4SSR
+
+- Clean World (広告を削除): サポート
+- 自動速度測定: サポート
+- Microsoft オフロード: サポート
+- Apple の流用: サポート
+- Google 転送: サポート
+- 中国IPセグメントの強化：サポート
+- 外部 GFW の強化: サポート
+- NetEase の削除: サポート
   
