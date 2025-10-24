@@ -1,0 +1,64 @@
+name: Sync ACL4SSR
+
+on:
+  schedule:
+    # 每天 UTC 时间 2:00 运行（北京时间 10:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 允许手动触发
+  push:
+    branches: [ main, master ]
+    paths-ignore:
+      - 'Online_Full.ini' # 忽略 Online_Full.ini 的变更
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout current repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Backup Online_Full.ini
+      run: |
+        if [ -f "Online_Full.ini" ]; then
+          cp "Online_Full.ini" "Online_Full.ini.backup"
+          echo "已备份 Online_Full.ini"
+        fi
+    
+    - name: Sync ACL4SSR repository
+      run: |
+        # 克隆 ACL4SSR 仓库 (master 分支)
+        git clone --depth 1 --branch master https://github.com/Shinigamiconan/ACL4SSR.git temp_acl4ssr
+        
+        # 同步文件（排除 Online_Full.ini）
+        rsync -av --exclude='Online_Full.ini' --exclude='.github' --exclude='.git' temp_acl4ssr/ ./
+        
+        # 清理临时目录
+        rm -rf temp_acl4ssr
+    
+    - name: Restore Online_Full.ini
+      run: |
+        if [ -f "Online_Full.ini.backup" ]; then
+          mv "Online_Full.ini.backup" "Online_Full.ini"
+          echo "已恢复 Online_Full.ini"
+        fi
+    
+    - name: Check for changes
+      id: changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Commit and push changes
+      if: steps.changes.outputs.changes == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Auto sync with ACL4SSR repository [skip ci]"
+        git push

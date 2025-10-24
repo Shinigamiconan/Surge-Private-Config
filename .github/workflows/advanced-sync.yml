@@ -1,0 +1,121 @@
+name: Advanced ACL4SSR Sync
+
+on:
+  schedule:
+    # 每天 UTC 时间 2:00 运行（北京时间 10:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 允许手动触发
+  push:
+    branches: [ main, master ]
+    paths-ignore:
+      - 'Online_Full.ini'
+      - '.github/workflows/sync-acl4ssr.yml'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout current repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+    
+    - name: Setup Git
+      run: |
+        git config --global user.email "action@github.com"
+        git config --global user.name "GitHub Action"
+    
+    - name: Backup important files
+      run: |
+        # 备份重要文件
+        mkdir -p backup
+        if [ -f "Online_Full.ini" ]; then
+          cp "Online_Full.ini" "backup/"
+          echo "已备份 Online_Full.ini"
+        fi
+        
+        # 备份其他重要配置文件
+        for file in *.ini *.yml *.yaml *.json; do
+          if [ -f "$file" ] && [ "$file" != "Online_Full.ini" ]; then
+            cp "$file" "backup/" 2>/dev/null || true
+          fi
+        done
+    
+    - name: Clone ACL4SSR repository
+      run: |
+        git clone --depth 1 --branch master https://github.com/Shinigamiconan/ACL4SSR.git temp_acl4ssr
+    
+    - name: Sync files selectively
+      run: |
+        # 同步 Clash 规则文件
+        if [ -d "temp_acl4ssr/Clash" ]; then
+          rsync -av --exclude='*.ini' temp_acl4ssr/Clash/ ./Clash/
+        fi
+        
+        # 同步 Acl 文件
+        if [ -d "temp_acl4ssr/Acl" ]; then
+          rsync -av temp_acl4ssr/Acl/ ./Acl/
+        fi
+        
+        # 同步其他重要文件
+        for file in README.md LICENSE; do
+          if [ -f "temp_acl4ssr/$file" ]; then
+            cp "temp_acl4ssr/$file" "./"
+          fi
+        done
+        
+        # 清理临时目录
+        rm -rf temp_acl4ssr
+    
+    - name: Restore important files
+      run: |
+        # 恢复重要文件
+        if [ -f "backup/Online_Full.ini" ]; then
+          cp "backup/Online_Full.ini" "./"
+          echo "已恢复 Online_Full.ini"
+        fi
+        
+        # 恢复其他备份的配置文件
+        for file in backup/*.ini backup/*.yml backup/*.yaml backup/*.json; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            if [ "$filename" != "Online_Full.ini" ]; then
+              cp "$file" "./"
+            fi
+          fi
+        done
+        
+        # 清理备份目录
+        rm -rf backup
+    
+    - name: Check for changes
+      id: changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          echo "检测到变更："
+          git status --short
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "没有检测到变更"
+        fi
+    
+    - name: Commit and push changes
+      if: steps.changes.outputs.changes == 'true'
+      run: |
+        git add .
+        git commit -m "🔄 Auto sync with ACL4SSR repository
+
+        - 同步最新的 Clash 规则文件
+        - 同步最新的 Acl 规则文件  
+        - 保留自定义配置文件 Online_Full.ini
+        - 自动更新于 $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        git push
+        echo "✅ 同步完成并已推送到仓库"
+    
+    - name: No changes notification
+      if: steps.changes.outputs.changes == 'false'
+      run: |
+        echo "ℹ️ 没有检测到变更，跳过提交"
